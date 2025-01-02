@@ -12,5 +12,6 @@ public class TestDTO {
         public Integer id;
         public String title;
         public String body;
+        public String error;
     }
 }
