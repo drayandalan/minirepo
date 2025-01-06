@@ -13,6 +13,8 @@ import okhttp3.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -33,14 +35,11 @@ public class TestServiceImpl implements TestService {
     private OkHttpClient okHttpClient;
 
     @Override
-    public List<TestDTO.Response> getAll(Pageable pageable) {
+    public Page<TestDTO.Response> getAll(Pageable pageable) {
         List<TestDTO.Response> responses = new ArrayList<>();
 
         int pageSize = pageable.getPageSize();
         int pageNumber = pageable.getPageNumber();
-
-        if (isInteger(String.valueOf(pageSize)) || isInteger(String.valueOf(pageNumber)))
-            throw new IllegalArgumentException("Page size and page number must be valid integers.");
 
         if (pageSize <= 0)
             throw new IllegalArgumentException("Page size must be greater than zero.");
@@ -53,13 +52,14 @@ public class TestServiceImpl implements TestService {
                 .build();
 
         try (Response httpResponse = okHttpClient.newCall(httpRequest).execute()) {
-            if (httpResponse.code() == 404) throw new IOException("Not found: "+httpResponse);
+            if (httpResponse.code() == 404) throw new IOException("Not found: " + httpResponse);
             String responseBody = Objects.requireNonNull(httpResponse.body()).string();
             ArrayNode jsonArr = objectMapper.convertValue(responseBody, new TypeReference<>() {});
 
             int start = pageNumber * pageSize;
             int end = Math.min(start + pageSize, jsonArr.size());
 
+            // Collect paginated responses
             for (int i = start; i < end; i++) {
                 JsonNode json = jsonArr.get(i);
 
@@ -71,11 +71,12 @@ public class TestServiceImpl implements TestService {
 
                 responses.add(response);
             }
+
+            return new PageImpl<>(responses, pageable, jsonArr.size());
         } catch (Exception e) {
             log.error(e.getMessage());
+            throw new RuntimeException("Error fetching data", e);
         }
-
-        return responses;
     }
 
     @Override
